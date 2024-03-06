@@ -9,7 +9,7 @@ import os
 import boto3
 
 class RTSPProcessor:
-    def __init__(self, mongo_uri, db_name, WASABI_ACCESS_KEY, WASABI_SECRET_KEY, WASABI_REGION, WASABI_ENDPOINT_URL, WASABI_BUCKET_NAME):
+    def __init__(self, frame_skip, mongo_uri, db_name, WASABI_ACCESS_KEY, WASABI_SECRET_KEY, WASABI_REGION, WASABI_ENDPOINT_URL, WASABI_BUCKET_NAME):
         self.rtsp_links = []
         self.yolov8_detector = YOLOv8("models/yolov8m.onnx", conf_thres=0.5, iou_thres=0.5)
         self.db_handler = MongoDBHandler(mongo_uri, db_name)
@@ -22,6 +22,7 @@ class RTSPProcessor:
             region_name=WASABI_REGION
         )
         self.wasabi_bucket_name = WASABI_BUCKET_NAME
+        self.frame_skip = frame_skip
 
     def load_rtsp_links(self):
         self.rtsp_links = self.db_handler.get_rtsp_links()
@@ -86,6 +87,7 @@ class RTSPProcessor:
         time_counter = 0
         start_time = None
         recording = False  # Biến cờ để theo dõi việc ghi video
+        current_frame_count = 0
 
         while cap.isOpened():
             ret, frame = cap.read()
@@ -113,15 +115,18 @@ class RTSPProcessor:
                         upload_thread = threading.Thread(target=self.upload_video_to_wasabi, args=(video_path, camera_id, start_time, end_time))
                         upload_thread.start()
 
-                if recording:
-                    # Ghi video nếu đang trong trạng thái ghi
-                    if start_time is not None:
-                        video_path = f"./detected_videos/{camera_id}_{start_time}.mp4"
-                        if not os.path.exists(os.path.dirname(video_path)):
-                            os.makedirs(os.path.dirname(video_path))  # Tạo thư mục nếu chưa tồn tại
-                        if not os.path.exists(video_path):
-                            out = cv2.VideoWriter(video_path, cv2.VideoWriter_fourcc(*'mp4v'), 1, (frame.shape[1], frame.shape[0]))
+            if recording:
+                # Ghi video nếu đang trong trạng thái ghi
+                if start_time is not None:
+                    video_path = f"./detected_videos/{camera_id}_{start_time}.mp4"
+                    if not os.path.exists(os.path.dirname(video_path)):
+                        os.makedirs(os.path.dirname(video_path))  # Tạo thư mục nếu chưa tồn tại
+                    if not os.path.exists(video_path):
+                        out = cv2.VideoWriter(video_path, cv2.VideoWriter_fourcc(*'mp4v'), 30 / self.frame_skip, (frame.shape[1], frame.shape[0]))
+                    
+                    if current_frame_count % self.frame_skip == 0:
                         out.write(frame)
+                    current_frame_count += 1
         
         
 
@@ -134,6 +139,32 @@ class RTSPProcessor:
             print(f"Đã xóa video: {video_path}")
         except Exception as e:
             print(f"Lỗi khi xóa video: {e}")
+
+    def compress_video(self, video_path):
+        # Đọc video gốc
+        cap = cv2.VideoCapture(video_path)
+
+        # Khởi tạo VideoWriter cho video nén
+        compressed_video_path = video_path.replace('.mp4', '_compressed.mp4')
+        fourcc = cv2.VideoWriter_fourcc(*'avc1')  # Sử dụng codec H.264
+        out = cv2.VideoWriter(compressed_video_path, fourcc, 30, (int(cap.get(3)), int(cap.get(4))))
+
+        # Nén video frame by frame
+        while True:
+            ret, frame = cap.read()
+            if not ret:
+                break
+            out.write(frame)
+
+        # Giải phóng tài nguyên
+        cap.release()
+        out.release()
+
+        # Xóa video gốc
+        os.remove(video_path)
+
+        # Đổi tên video nén thành tên gốc
+        os.rename(compressed_video_path, video_path)
 
     def start_processing(self):
         self.start_rtsp_links_watcher()

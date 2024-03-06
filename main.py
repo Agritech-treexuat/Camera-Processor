@@ -22,8 +22,9 @@ def main():
 
     mongo_uri = f"mongodb://{MONGO_USERNAME}:{MONGO_PASSWORD}@{MONGO_HOST}:{MONGO_PORT}"
     db_name = MONGO_DB_NAME
+    frame_skip = 10
 
-    rtsp_processor = RTSPProcessor(mongo_uri, db_name, WASABI_ACCESS_KEY, WASABI_SECRET_KEY, WASABI_REGION, WASABI_ENDPOINT_URL, WASABI_BUCKET_NAME)
+    rtsp_processor = RTSPProcessor(frame_skip, mongo_uri, db_name, WASABI_ACCESS_KEY, WASABI_SECRET_KEY, WASABI_REGION, WASABI_ENDPOINT_URL, WASABI_BUCKET_NAME)
     rtsp_processor.start_processing()
 
 if __name__ == "__main__":
