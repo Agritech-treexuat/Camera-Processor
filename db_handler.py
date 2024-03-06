@@ -18,7 +18,7 @@ class MongoDBHandler:
 
     def get_rtsp_links(self):
         links = []
-        cursor = self.db.Camera.find({}, {"_id": 0, "rtsp_link": 1})
+        cursor = self.db.Cameras.find({}, {"_id": 0, "rtsp_link": 1})
         for document in cursor:
             links.append(document["rtsp_link"])
         return links
@@ -26,10 +26,10 @@ class MongoDBHandler:
     def start_rtsp_links_watcher(self):
         def watch_rtsp_links():
             while True:
-                # Lặp vô hạn để theo dõi thay đổi trong collection "Camera"
+                # Lặp vô hạn để theo dõi thay đổi trong collection "Cameras"
                 try:
-                    # Kiểm tra thay đổi trong collection "Camera"
-                    camera_collection = self.db["Camera"]
+                    # Kiểm tra thay đổi trong collection "Cameras"
+                    camera_collection = self.db["Cameras"]
                     latest_change = camera_collection.find_one({}, sort=[('$natural', -1)])
                     if latest_change:
                         latest_change_time = latest_change['_id'].generation_time
@@ -39,7 +39,7 @@ class MongoDBHandler:
                             self.load_rtsp_links()
                             self.last_change_time = latest_change_time
                 except Exception as e:
-                    print(f"Lỗi khi kiểm tra thay đổi trong collection 'Camera': {e}")
+                    print(f"Lỗi khi kiểm tra thay đổi trong collection 'Cameras': {e}")
                 
                 # Chờ một khoảng thời gian trước khi kiểm tra lại
                 time.sleep(10)

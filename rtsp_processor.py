@@ -5,13 +5,23 @@ from pymongo import MongoClient
 from yolov8 import YOLOv8
 from db_handler import MongoDBHandler
 import time
+import os
+import boto3
 
 class RTSPProcessor:
-    def __init__(self, mongo_uri, db_name):
+    def __init__(self, mongo_uri, db_name, WASABI_ACCESS_KEY, WASABI_SECRET_KEY, WASABI_REGION, WASABI_ENDPOINT_URL, WASABI_BUCKET_NAME):
         self.rtsp_links = []
         self.yolov8_detector = YOLOv8("models/yolov8m.onnx", conf_thres=0.5, iou_thres=0.5)
         self.db_handler = MongoDBHandler(mongo_uri, db_name)
         self.load_rtsp_links()
+        self.wasabi_client = boto3.client(
+            's3',
+            endpoint_url=WASABI_ENDPOINT_URL,
+            aws_access_key_id=WASABI_ACCESS_KEY,
+            aws_secret_access_key=WASABI_SECRET_KEY,
+            region_name=WASABI_REGION
+        )
+        self.wasabi_bucket_name = WASABI_BUCKET_NAME
 
     def load_rtsp_links(self):
         self.rtsp_links = self.db_handler.get_rtsp_links()
@@ -20,10 +30,10 @@ class RTSPProcessor:
     def start_rtsp_links_watcher(self):
         def watch_rtsp_links():
             while True:
-                # Lặp vô hạn để theo dõi thay đổi trong collection "Camera"
+                # Lặp vô hạn để theo dõi thay đổi trong collection "Cameras"
                 try:
-                    # Kiểm tra thay đổi trong collection "Camera"
-                    camera_collection = self.db_handler.db["Camera"]
+                    # Kiểm tra thay đổi trong collection "Cameras"
+                    camera_collection = self.db_handler.db["Cameras"]
                     latest_change = camera_collection.find_one({}, sort=[('$natural', -1)])
                     if latest_change:
                         latest_change_time = latest_change['_id'].generation_time
@@ -35,7 +45,7 @@ class RTSPProcessor:
                             
 
                 except Exception as e:
-                    print(f"Lỗi khi kiểm tra thay đổi trong collection 'Camera': {e}")
+                    print(f"Lỗi khi kiểm tra thay đổi trong collection 'Cameras': {e}")
                 
                 # Chờ một khoảng thời gian trước khi kiểm tra lại
                 time.sleep(10)
@@ -48,6 +58,17 @@ class RTSPProcessor:
     def log_detection(self, camera_id, start_time, end_time):
         self.db_handler.insert_detection_log(camera_id, start_time, end_time)
     
+    def upload_video_to_wasabi(self, video_path, camera_id, start_time, end_time):
+        try:
+            file_name = os.path.basename(video_path)
+            wasabi_key = f"detected_videos/{camera_id}/{start_time}_{end_time}_{file_name}"
+            self.wasabi_client.upload_file(video_path, self.wasabi_bucket_name, wasabi_key)
+            print(f"Uploaded video {file_name} to Wasabi")
+            self.delete_video(video_path)  # Xóa video sau khi hoàn thành ghi và upload
+            print(f"Đã xóa video {video_path}")
+        except Exception as e:
+            print(f"Error uploading video to Wasabi: {e}")
+
     def process_yolo(self, frame):
         boxes, scores, class_ids = self.yolov8_detector(frame)
         if any(class_id == 0 and score > 0.5 for class_id, score in zip(class_ids, scores )):
@@ -57,12 +78,14 @@ class RTSPProcessor:
     def process_rtsp(self, rtsp_link):
         print(f"Bắt đầu xử lý luồng cho URL: {rtsp_link}")
         # Lấy camera_id từ MongoDB dựa trên rtsp_link
-        camera_id = self.db_handler.db.Camera.find_one({"rtsp_link": rtsp_link}, {"_id": 1})["_id"]
+        camera_id = self.db_handler.db.Cameras.find_one({"rtsp_link": rtsp_link}, {"_id": 1})["_id"]
 
         cap = cv2.VideoCapture(rtsp_link)
 
         person_detected = False
         time_counter = 0
+        start_time = None
+        recording = False  # Biến cờ để theo dõi việc ghi video
 
         while cap.isOpened():
             ret, frame = cap.read()
@@ -76,15 +99,41 @@ class RTSPProcessor:
                 if self.process_yolo(frame):
                     if not person_detected:
                         person_detected = True
-                        start_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                        start_time = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+                        recording = True  # Bắt đầu ghi video khi phát hiện người
                 else:
                     if person_detected:
                         person_detected = False
-                        end_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                        self.log_detection(camera_id, start_time, end_time)
+                        end_time = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+                        if recording:
+                            out.release()  # Đảm bảo rằng video cuối cùng được đóng sau khi kết thúc luồng
+                            
+                        recording = False  # Dừng ghi video khi không phát hiện nữa
+                        # Upload video phát hiện lên Wasabi
+                        upload_thread = threading.Thread(target=self.upload_video_to_wasabi, args=(video_path, camera_id, start_time, end_time))
+                        upload_thread.start()
+
+                if recording:
+                    # Ghi video nếu đang trong trạng thái ghi
+                    if start_time is not None:
+                        video_path = f"./detected_videos/{camera_id}_{start_time}.mp4"
+                        if not os.path.exists(os.path.dirname(video_path)):
+                            os.makedirs(os.path.dirname(video_path))  # Tạo thư mục nếu chưa tồn tại
+                        if not os.path.exists(video_path):
+                            out = cv2.VideoWriter(video_path, cv2.VideoWriter_fourcc(*'mp4v'), 1, (frame.shape[1], frame.shape[0]))
+                        out.write(frame)
+        
+        
 
         cap.release()
         print(f"Kết thúc xử lý luồng cho URL: {rtsp_link}")
+
+    def delete_video(self, video_path):
+        try:
+            os.remove(video_path)
+            print(f"Đã xóa video: {video_path}")
+        except Exception as e:
+            print(f"Lỗi khi xóa video: {e}")
 
     def start_processing(self):
         self.start_rtsp_links_watcher()
@@ -116,5 +165,3 @@ class RTSPProcessor:
                     thread = threading.Thread(target=self.process_rtsp, args=(rtsp_link,))
                     thread.start()
                     threads.append(thread)
-
-
