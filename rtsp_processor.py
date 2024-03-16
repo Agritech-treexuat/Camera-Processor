@@ -10,6 +10,8 @@ import os
 import boto3
 from random import randint
 
+os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = "rtsp_transport;udp"
+
 class RTSPProcessor:
     def __init__(self, frame_skip, mongo_uri, db_name, WASABI_ACCESS_KEY, WASABI_SECRET_KEY, WASABI_REGION, WASABI_ENDPOINT_URL, WASABI_BUCKET_NAME):
         self.rtsp_links = []
@@ -86,7 +88,7 @@ class RTSPProcessor:
         # Lấy camera_id từ MongoDB dựa trên rtsp_link
         camera_id = self.db_handler.db.Cameras.find_one({"rtsp_link": rtsp_link}, {"_id": 1})["_id"]
 
-        cap = cv2.VideoCapture(rtsp_link)
+        cap = cv2.VideoCapture(rtsp_link, cv2.CAP_FFMPEG)
 
         person_detected = False
         time_counter = 0
@@ -108,9 +110,11 @@ class RTSPProcessor:
                         person_detected = True
                         start_time = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
                         recording = True  # Bắt đầu ghi video khi phát hiện người
+                        print(f"Phát hiện người tại {rtsp_link} lúc {start_time}")
                 else:
                     if person_detected:
                         person_detected = False
+                        print(f"Ngừng phát hiện người tại {rtsp_link}")
                         end_time = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
                         if recording:
                             out.release()  # Đảm bảo rằng video cuối cùng được đóng sau khi kết thúc luồng
@@ -188,7 +192,7 @@ class RTSPProcessor:
                 time.sleep(1)
 
             # Chụp frame tại thời điểm đã chọn từ luồng RTSP
-            cap = cv2.VideoCapture(rtsp_link)
+            cap = cv2.VideoCapture(rtsp_link, cv2.CAP_FFMPEG)
             ret, frame = cap.read()
             cap.release()
 
