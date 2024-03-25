@@ -5,8 +5,12 @@ from pymongo import MongoClient
 from yolov8 import YOLOv8
 from db_handler import MongoDBHandler
 import time
+from datetime import timedelta
 import os
 import boto3
+from random import randint
+
+os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = "rtsp_transport;udp"
 
 class RTSPProcessor:
     def __init__(self, frame_skip, mongo_uri, db_name, WASABI_ACCESS_KEY, WASABI_SECRET_KEY, WASABI_REGION, WASABI_ENDPOINT_URL, WASABI_BUCKET_NAME):
@@ -23,6 +27,7 @@ class RTSPProcessor:
         )
         self.wasabi_bucket_name = WASABI_BUCKET_NAME
         self.frame_skip = frame_skip
+        self.wasabi_endpoint_url = WASABI_ENDPOINT_URL
 
     def load_rtsp_links(self):
         self.rtsp_links = self.db_handler.get_rtsp_links()
@@ -56,8 +61,8 @@ class RTSPProcessor:
         thread = threading.Thread(target=watch_rtsp_links)
         thread.start()
 
-    def log_detection(self, camera_id, start_time, end_time):
-        self.db_handler.insert_detection_log(camera_id, start_time, end_time)
+    def log_detection(self, camera_id, start_time, end_time, video_url):
+        self.db_handler.insert_detection_log(camera_id, start_time, end_time, video_url)
     
     def upload_video_to_wasabi(self, video_path, camera_id, start_time, end_time):
         try:
@@ -67,6 +72,8 @@ class RTSPProcessor:
             print(f"Uploaded video {file_name} to Wasabi")
             self.delete_video(video_path)  # Xóa video sau khi hoàn thành ghi và upload
             print(f"Đã xóa video {video_path}")
+            self.log_detection(camera_id, start_time, end_time, self.wasabi_endpoint_url + "/" + self.wasabi_bucket_name + "/" + wasabi_key)
+            print(f"Đã lưu thông tin phát hiện vào MongoDB")
         except Exception as e:
             print(f"Error uploading video to Wasabi: {e}")
 
@@ -81,7 +88,7 @@ class RTSPProcessor:
         # Lấy camera_id từ MongoDB dựa trên rtsp_link
         camera_id = self.db_handler.db.Cameras.find_one({"rtsp_link": rtsp_link}, {"_id": 1})["_id"]
 
-        cap = cv2.VideoCapture(rtsp_link)
+        cap = cv2.VideoCapture(rtsp_link, cv2.CAP_FFMPEG)
 
         person_detected = False
         time_counter = 0
@@ -103,9 +110,11 @@ class RTSPProcessor:
                         person_detected = True
                         start_time = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
                         recording = True  # Bắt đầu ghi video khi phát hiện người
+                        print(f"Phát hiện người tại {rtsp_link} lúc {start_time}")
                 else:
                     if person_detected:
                         person_detected = False
+                        print(f"Ngừng phát hiện người tại {rtsp_link}")
                         end_time = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
                         if recording:
                             out.release()  # Đảm bảo rằng video cuối cùng được đóng sau khi kết thúc luồng
@@ -166,6 +175,57 @@ class RTSPProcessor:
         # Đổi tên video nén thành tên gốc
         os.rename(compressed_video_path, video_path)
 
+    def capture_and_upload_image(self, rtsp_link):
+        while True:
+            # Tính toán thời điểm chụp ảnh ngẫu nhiên trong mỗi giờ
+            current_time = datetime.now()
+            next_hour = current_time.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
+            random_minute = randint(0, 59)
+            capture_time = next_hour.replace(minute=random_minute)
+
+            # capture_time = current_time + timedelta(seconds=10)
+            print(f"Thời gian hiện tại: {current_time}")
+            print(f"Chờ đến thời điểm chụp ảnh: {capture_time}")
+
+            # Chờ đến thời điểm chụp ảnh
+            while datetime.now() < capture_time:
+                time.sleep(1)
+
+            # Chụp frame tại thời điểm đã chọn từ luồng RTSP
+            cap = cv2.VideoCapture(rtsp_link, cv2.CAP_FFMPEG)
+            ret, frame = cap.read()
+            cap.release()
+
+            # Tạo tên file ảnh dựa trên thời gian chụp và camera ID
+            camera_id = self.db_handler.db.Cameras.find_one({"rtsp_link": rtsp_link}, {"_id": 1})["_id"]
+            image_filename = f"{camera_id}_{capture_time.strftime('%Y-%m-%d_%H-%M-%S')}.jpg"
+
+            if not os.path.exists("./temp_images"):
+                os.makedirs("./temp_images")
+            # Lưu ảnh vào thư mục tạm thời
+            temp_image_path = os.path.join("./temp_images", image_filename)
+            cv2.imwrite(temp_image_path, frame)
+
+            # Upload ảnh lên Wasabi
+            wasabi_key = f"captured_images/{image_filename}"
+            try:
+                self.wasabi_client.upload_file(temp_image_path, self.wasabi_bucket_name, wasabi_key)
+                print(f"Uploaded image {image_filename} to Wasabi")
+
+                # Lưu thông tin ảnh vào collection Images trong MongoDB
+                image_info = {
+                    "camera_id": camera_id,
+                    "capture_time": capture_time,
+                    "image_url": f"{self.wasabi_endpoint_url}/{self.wasabi_bucket_name}/{wasabi_key}"
+                }
+                self.db_handler.db.Images.insert_one(image_info)
+                print("Saved image info to MongoDB")
+            except Exception as e:
+                print(f"Error uploading image to Wasabi: {e}")
+
+            # Xóa ảnh tạm sau khi upload
+            os.remove(temp_image_path)
+
     def start_processing(self):
         self.start_rtsp_links_watcher()
 
@@ -196,3 +256,11 @@ class RTSPProcessor:
                     thread = threading.Thread(target=self.process_rtsp, args=(rtsp_link,))
                     thread.start()
                     threads.append(thread)
+    
+    def start_capture_and_upload_threads(self):
+        threads = []
+        for rtsp_link in self.rtsp_links:
+            thread = threading.Thread(target=self.capture_and_upload_image, args=(rtsp_link,))
+            thread.start()
+            threads.append(thread)
+        return threads

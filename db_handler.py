@@ -8,11 +8,12 @@ class MongoDBHandler:
         self.db = self.client[db_name]
         self.load_rtsp_links()
 
-    def insert_detection_log(self, camera_id, start_time, end_time):
+    def insert_detection_log(self, camera_id, start_time, end_time, video_url):
         log_data = {
             "camera_id": camera_id,
             "start_time": start_time,
-            "end_time": end_time
+            "end_time": end_time,
+            "video_url": video_url
         }
         self.db.ObjectDetection.insert_one(log_data)
 
