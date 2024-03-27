@@ -25,6 +25,7 @@ def main():
     mongo_uri = f"mongodb://{MONGO_USERNAME}:{MONGO_PASSWORD}@{MONGO_HOST}:{MONGO_PORT}"
     if MONGO_URI:
         mongo_uri = MONGO_URI
+    print(f"Connecting to MongoDB...")
     db_name = MONGO_DB_NAME
     frame_skip = 10
 
