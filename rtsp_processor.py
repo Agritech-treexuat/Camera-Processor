@@ -95,11 +95,24 @@ class RTSPProcessor:
         start_time = None
         recording = False  # Biến cờ để theo dõi việc ghi video
         current_frame_count = 0
+        connection_lost = False
+        connection_lost_time = None
 
         while cap.isOpened():
             ret, frame = cap.read()
             if not ret:
-                break
+                if not connection_lost:
+                    connection_lost = True
+                    connection_lost_time = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+                    print(f"Mất kết nối với camera {rtsp_link} lúc {connection_lost_time}")
+                continue
+            else:
+                if connection_lost:
+                    connection_lost = False
+                    reconnection_time = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+                    print(f"Kết nối lại với camera {rtsp_link} lúc {reconnection_time}")
+                    # Lưu thông tin mất kết nối vào collection ConnectionLoss
+                    self.db_handler.insert_connection_log(camera_id, connection_lost_time, reconnection_time)
 
             current_time = cap.get(cv2.CAP_PROP_POS_MSEC) / 1000
 
