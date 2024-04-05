@@ -11,12 +11,13 @@ class MongoDBHandler:
         self.load_rtsp_links()
 
     def insert_detection_log(self, camera_id, start_time, end_time, video_url):
-        start_time = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(start_time))
-        end_time = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(end_time))
+        # Chuyển đổi chuỗi thành datetime
+        start_time_date = datetime.strptime(start_time, "%Y-%m-%d_%H-%M-%S")
+        end_time_date = datetime.strptime(end_time, "%Y-%m-%d_%H-%M-%S")
         log_data = {
             "camera_id": camera_id,
-            "start_time": start_time,
-            "end_time": end_time,
+            "start_time": start_time_date,
+            "end_time": end_time_date,
             "video_url": video_url
         }
         self.db.ObjectDetection.insert_one(log_data)

@@ -40,9 +40,13 @@ class DataProcessor:
         for cameraIndex, detections in object_detections_by_camera.items():
             # Tải video từ video_url và ghép nối lại
             concatenated_hash = ""
+            timeDescription = ""
             for detection in detections:
                 # Lấy video_url từ detection
                 video_url = detection.get('video_url')
+                start_time = detection.get('start_time')
+                end_time = detection.get('end_time')
+                timeDescription += f"Start Time: {start_time}, End Time: {end_time}"
                 if video_url:
                     # Tải xuống video từ URL
                     video_content = self.download_video(video_url)
@@ -54,10 +58,12 @@ class DataProcessor:
 
             # Convert ngày thành Unix timestamp
             date_timestamp = int(datetime.timestamp(datetime.now()))
+
+            print("Ghi lên Blockchain: ", cameraIndex, concatenated_hash, date_timestamp, timeDescription)
             
 
             # Ghi lên Blockchain
-            self.blockchain_handler.upload_video_hash(cameraIndex, concatenated_hash, date_timestamp)
+            self.blockchain_handler.upload_video_hash(cameraIndex, concatenated_hash, date_timestamp, timeDescription)
 
         # Xử lý dữ liệu và ghi lên Blockchain cho từng camera về ConnectionLoss
         for cameraIndex, losses in connection_losses_by_camera.items():

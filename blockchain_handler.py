@@ -19,13 +19,13 @@ class BlockchainHandler:
         # Thêm middleware để tự động ký và gửi giao dịch
         self.web3.middleware_onion.add(construct_sign_and_send_raw_middleware(self.private_key))
 
-    def upload_video_hash(self, cameraIndex, video_hash, date_timestamp):
+    def upload_video_hash(self, cameraIndex, video_hash, date_timestamp, timeDescription):
         # Ghi lên Blockchain video_hash, camera_id, và date_timestamp
         try:
             nonce = self.web3.eth.get_transaction_count(self.caller)
 
             # Call your function
-            call_function = self.contract_instance.functions.addVideo(cameraIndex, video_hash, date_timestamp).build_transaction({"chainId": self.Chain_id, "from": self.caller, "nonce": nonce})
+            call_function = self.contract_instance.functions.addVideo(cameraIndex, video_hash, date_timestamp, timeDescription).build_transaction({"chainId": self.Chain_id, "from": self.caller, "nonce": nonce})
 
             # Sign transaction
             signed_tx = self.web3.eth.account.sign_transaction(call_function, private_key=self.private_key)
