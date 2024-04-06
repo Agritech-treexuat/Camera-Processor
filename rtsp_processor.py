@@ -15,7 +15,7 @@ import cloudinary.api
 from dotenv import load_dotenv
 
 
-load_dotenv()
+load_dotenv(override=True)
 
 os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = "rtsp_transport;udp"
 

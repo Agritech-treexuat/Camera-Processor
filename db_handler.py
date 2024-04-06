@@ -20,7 +20,7 @@ class MongoDBHandler:
             "end_time": end_time_date,
             "video_url": video_url
         }
-        self.db.ObjectDetection.insert_one(log_data)
+        self.db.ObjectDetections.insert_one(log_data)
     
     def insert_connection_log(self, camera_id, start_time, end_time):
         start_time = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(start_time))
@@ -30,7 +30,7 @@ class MongoDBHandler:
             "start_time": start_time,
             "end_time": end_time
         }
-        self.db.ConnectionLoss.insert_one(log_data)
+        self.db.ConnectionLosses.insert_one(log_data)
 
     def get_rtsp_links(self):
         links = []
@@ -72,7 +72,7 @@ class MongoDBHandler:
         start_of_day = datetime.combine(date, datetime.min.time())
         end_of_day = start_of_day + timedelta(days=1)
         # Tìm các tài liệu có start_time nằm trong khoảng thời gian này
-        cursor = self.db.ObjectDetection.find({"start_time": {"$gte": start_of_day, "$lt": end_of_day}}, {"_id": 0})
+        cursor = self.db.ObjectDetections.find({"start_time": {"$gte": start_of_day, "$lt": end_of_day}}, {"_id": 0})
         cursor_list = list(cursor)
         return cursor_list
     
@@ -81,7 +81,7 @@ class MongoDBHandler:
         start_of_day = datetime.combine(date, datetime.min.time())
         end_of_day = start_of_day + timedelta(days=1)
         # Tìm các tài liệu có start_time nằm trong khoảng thời gian này
-        cursor = self.db.ConnectionLoss.find({"start_time": {"$gte": start_of_day, "$lt": end_of_day}}, {"_id": 0})
+        cursor = self.db.ConnectionLosses.find({"start_time": {"$gte": start_of_day, "$lt": end_of_day}}, {"_id": 0})
         cursor_list = list(cursor)
         return cursor_list
     

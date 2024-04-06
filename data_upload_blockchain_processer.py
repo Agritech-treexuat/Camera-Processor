@@ -12,7 +12,7 @@ class DataProcessor:
         # Lấy ngày hôm nay
         current_date = datetime.now().date()
 
-        # Lấy dữ liệu ObjectDetection của ngày hôm nay
+        # Lấy dữ liệu ObjectDetections của ngày hôm nay
         object_detections = self.mongo_handler.load_object_detection_by_date(current_date)
 
         # Lấy dữ liệu ConnectionLoss của ngày hôm nay
@@ -72,6 +72,8 @@ class DataProcessor:
 
             # Convert ngày thành Unix timestamp
             date_timestamp = int(datetime.timestamp(datetime.now()))
+
+            print("Ghi lên Blockchain: ", cameraIndex, concatenated_losses, total_loss_per_day, date_timestamp)
             
             # Ghi lên Blockchain
             self.blockchain_handler.upload_connection_losses(cameraIndex, concatenated_losses, total_loss_per_day, date_timestamp)
