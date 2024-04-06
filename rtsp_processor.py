@@ -9,25 +9,23 @@ from datetime import timedelta
 import os
 import boto3
 from random import randint
+import cloudinary
+import cloudinary.uploader
+import cloudinary.api
+from dotenv import load_dotenv
+
+
+load_dotenv(override=True)
 
 os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = "rtsp_transport;udp"
 
 class RTSPProcessor:
-    def __init__(self, frame_skip, mongo_uri, db_name, WASABI_ACCESS_KEY, WASABI_SECRET_KEY, WASABI_REGION, WASABI_ENDPOINT_URL, WASABI_BUCKET_NAME):
+    def __init__(self, frame_skip, mongo_uri, db_name):
         self.rtsp_links = []
         self.yolov8_detector = YOLOv8("models/yolov8m.onnx", conf_thres=0.5, iou_thres=0.5)
         self.db_handler = MongoDBHandler(mongo_uri, db_name)
         self.load_rtsp_links()
-        self.wasabi_client = boto3.client(
-            's3',
-            endpoint_url=WASABI_ENDPOINT_URL,
-            aws_access_key_id=WASABI_ACCESS_KEY,
-            aws_secret_access_key=WASABI_SECRET_KEY,
-            region_name=WASABI_REGION
-        )
-        self.wasabi_bucket_name = WASABI_BUCKET_NAME
         self.frame_skip = frame_skip
-        self.wasabi_endpoint_url = WASABI_ENDPOINT_URL
 
     def load_rtsp_links(self):
         self.rtsp_links = self.db_handler.get_rtsp_links()
@@ -64,18 +62,30 @@ class RTSPProcessor:
     def log_detection(self, camera_id, start_time, end_time, video_url):
         self.db_handler.insert_detection_log(camera_id, start_time, end_time, video_url)
     
-    def upload_video_to_wasabi(self, video_path, camera_id, start_time, end_time):
+    def upload_video_to_cloudinary(self, video_path, camera_id, start_time, end_time):
         try:
-            file_name = os.path.basename(video_path)
-            wasabi_key = f"detected_videos/{camera_id}/{start_time}_{end_time}_{file_name}"
-            self.wasabi_client.upload_file(video_path, self.wasabi_bucket_name, wasabi_key)
-            print(f"Uploaded video {file_name} to Wasabi")
-            self.delete_video(video_path)  # Xóa video sau khi hoàn thành ghi và upload
+            # Tải video lên Cloudinary
+            response = cloudinary.uploader.upload_large(video_path, 
+                resource_type="video",
+                folder=f"detected_object/{camera_id}",  # Lưu vào thư mục detected_object trên Cloudinary
+                public_id=f"{camera_id}_{start_time}_{end_time}",  # Tạo public_id dựa trên camera_id, start_time, và end_time
+                chunk_size=6000000
+            )
+            print(f"Uploaded video {video_path} to Cloudinary")
+            print("responce:", response)
+            
+            # Lấy URL của video từ response của Cloudinary
+            video_url = response['secure_url']
+            
+            # Xóa video sau khi hoàn thành ghi và upload
+            self.delete_video(video_path)
             print(f"Đã xóa video {video_path}")
-            self.log_detection(camera_id, start_time, end_time, self.wasabi_endpoint_url + "/" + self.wasabi_bucket_name + "/" + wasabi_key)
+
+            # Lưu thông tin phát hiện vào MongoDB
+            self.log_detection(camera_id, start_time, end_time, video_url)
             print(f"Đã lưu thông tin phát hiện vào MongoDB")
         except Exception as e:
-            print(f"Error uploading video to Wasabi: {e}")
+            print(f"Error uploading video to Cloudinary: {e}")
 
     def process_yolo(self, frame):
         boxes, scores, class_ids = self.yolov8_detector(frame)
@@ -95,11 +105,24 @@ class RTSPProcessor:
         start_time = None
         recording = False  # Biến cờ để theo dõi việc ghi video
         current_frame_count = 0
+        connection_lost = False
+        connection_lost_time = None
 
         while cap.isOpened():
             ret, frame = cap.read()
             if not ret:
-                break
+                if not connection_lost:
+                    connection_lost = True
+                    connection_lost_time = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+                    print(f"Mất kết nối với camera {rtsp_link} lúc {connection_lost_time}")
+                continue
+            else:
+                if connection_lost:
+                    connection_lost = False
+                    reconnection_time = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+                    print(f"Kết nối lại với camera {rtsp_link} lúc {reconnection_time}")
+                    # Lưu thông tin mất kết nối vào collection ConnectionLoss
+                    self.db_handler.insert_connection_log(camera_id, connection_lost_time, reconnection_time)
 
             current_time = cap.get(cv2.CAP_PROP_POS_MSEC) / 1000
 
@@ -120,18 +143,19 @@ class RTSPProcessor:
                             out.release()  # Đảm bảo rằng video cuối cùng được đóng sau khi kết thúc luồng
                             
                         recording = False  # Dừng ghi video khi không phát hiện nữa
-                        # Upload video phát hiện lên Wasabi
-                        upload_thread = threading.Thread(target=self.upload_video_to_wasabi, args=(video_path, camera_id, start_time, end_time))
+                        # Upload video phát hiện lên Cloudinary
+                        upload_thread = threading.Thread(target=self.upload_video_to_cloudinary, args=(video_path, camera_id, start_time, end_time))
                         upload_thread.start()
 
             if recording:
                 # Ghi video nếu đang trong trạng thái ghi
                 if start_time is not None:
-                    video_path = f"./detected_videos/{camera_id}_{start_time}.mp4"
+                    video_path = f"./detected_videos/{camera_id}_{start_time}.webm"
                     if not os.path.exists(os.path.dirname(video_path)):
                         os.makedirs(os.path.dirname(video_path))  # Tạo thư mục nếu chưa tồn tại
                     if not os.path.exists(video_path):
-                        out = cv2.VideoWriter(video_path, cv2.VideoWriter_fourcc(*'mp4v'), 30 / self.frame_skip, (frame.shape[1], frame.shape[0]))
+                        fourcc = cv2.VideoWriter_fourcc(*'vp80')
+                        out = cv2.VideoWriter(video_path, fourcc, 30 / self.frame_skip, (frame.shape[1], frame.shape[0]))
                     
                     if current_frame_count % self.frame_skip == 0:
                         out.write(frame)
@@ -154,9 +178,10 @@ class RTSPProcessor:
         cap = cv2.VideoCapture(video_path)
 
         # Khởi tạo VideoWriter cho video nén
-        compressed_video_path = video_path.replace('.mp4', '_compressed.mp4')
-        fourcc = cv2.VideoWriter_fourcc(*'avc1')  # Sử dụng codec H.264
-        out = cv2.VideoWriter(compressed_video_path, fourcc, 30, (int(cap.get(3)), int(cap.get(4))))
+        # compressed_video_path = video_path.replace('.mp4', '_compressed.mp4')
+        # fourcc = cv2.VideoWriter_fourcc(*'avc1')  # Sử dụng codec H.264
+        # out = cv2.VideoWriter(compressed_video_path, fourcc, 30, (int(cap.get(3)), int(cap.get(4))))
+        out = cv2.VideoWriter(video_path, cv2.VideoWriter_fourcc(*'XVID'), 30, (frame.shape[1], frame.shape[0]))
 
         # Nén video frame by frame
         while True:
@@ -206,22 +231,28 @@ class RTSPProcessor:
             temp_image_path = os.path.join("./temp_images", image_filename)
             cv2.imwrite(temp_image_path, frame)
 
-            # Upload ảnh lên Wasabi
-            wasabi_key = f"captured_images/{image_filename}"
             try:
-                self.wasabi_client.upload_file(temp_image_path, self.wasabi_bucket_name, wasabi_key)
-                print(f"Uploaded image {image_filename} to Wasabi")
+                # Upload image to Cloudinary
+                response = cloudinary.uploader.upload(temp_image_path, 
+                    folder=f"captured_images/{camera_id}",  # Save image to captured_images folder on Cloudinary
+                    public_id=image_filename,  # Use image filename as public_id
+                )
+                print(f"Uploaded image {image_filename} to Cloudinary")
 
-                # Lưu thông tin ảnh vào collection Images trong MongoDB
+                # Get image URL from Cloudinary response
+                image_url = response['secure_url']
+
+                # Save image info to MongoDB
                 image_info = {
                     "camera_id": camera_id,
                     "capture_time": capture_time,
-                    "image_url": f"{self.wasabi_endpoint_url}/{self.wasabi_bucket_name}/{wasabi_key}"
+                    "image_url": image_url
                 }
                 self.db_handler.db.Images.insert_one(image_info)
                 print("Saved image info to MongoDB")
             except Exception as e:
-                print(f"Error uploading image to Wasabi: {e}")
+                print(f"Error uploading image to Cloudinary: {e}")
+
 
             # Xóa ảnh tạm sau khi upload
             os.remove(temp_image_path)

@@ -1,6 +1,8 @@
 import pymongo
 import threading
 import time
+from bson.objectid import ObjectId
+from datetime import datetime, timedelta
 
 class MongoDBHandler:
     def __init__(self, mongo_uri, db_name):
@@ -9,13 +11,26 @@ class MongoDBHandler:
         self.load_rtsp_links()
 
     def insert_detection_log(self, camera_id, start_time, end_time, video_url):
+        # Chuyển đổi chuỗi thành datetime
+        start_time_date = datetime.strptime(start_time, "%Y-%m-%d_%H-%M-%S")
+        end_time_date = datetime.strptime(end_time, "%Y-%m-%d_%H-%M-%S")
+        log_data = {
+            "camera_id": camera_id,
+            "start_time": start_time_date,
+            "end_time": end_time_date,
+            "video_url": video_url
+        }
+        self.db.ObjectDetections.insert_one(log_data)
+    
+    def insert_connection_log(self, camera_id, start_time, end_time):
+        start_time = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(start_time))
+        end_time = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(end_time))
         log_data = {
             "camera_id": camera_id,
             "start_time": start_time,
-            "end_time": end_time,
-            "video_url": video_url
+            "end_time": end_time
         }
-        self.db.ObjectDetection.insert_one(log_data)
+        self.db.ConnectionLosses.insert_one(log_data)
 
     def get_rtsp_links(self):
         links = []
@@ -52,3 +67,24 @@ class MongoDBHandler:
     def load_rtsp_links(self):
         self.rtsp_links = self.get_rtsp_links()
 
+    def load_object_detection_by_date(self, date):
+        # load all object detection logs of the day (start_time and end_time in that day)
+        start_of_day = datetime.combine(date, datetime.min.time())
+        end_of_day = start_of_day + timedelta(days=1)
+        # Tìm các tài liệu có start_time nằm trong khoảng thời gian này
+        cursor = self.db.ObjectDetections.find({"start_time": {"$gte": start_of_day, "$lt": end_of_day}}, {"_id": 0})
+        cursor_list = list(cursor)
+        return cursor_list
+    
+    def load_connection_loss_by_date(self, date):
+        # start of day is day at 0h0m0s, now date is datetime.date type
+        start_of_day = datetime.combine(date, datetime.min.time())
+        end_of_day = start_of_day + timedelta(days=1)
+        # Tìm các tài liệu có start_time nằm trong khoảng thời gian này
+        cursor = self.db.ConnectionLosses.find({"start_time": {"$gte": start_of_day, "$lt": end_of_day}}, {"_id": 0})
+        cursor_list = list(cursor)
+        return cursor_list
+    
+    def get_cameraIndex_by_camera_id(self, camera_id):
+        cursor = self.db.Cameras.find_one({"_id": ObjectId(camera_id)})
+        return cursor["cameraIndex"]
