@@ -63,7 +63,14 @@ class DataProcessor:
             
 
             # Ghi lên Blockchain
-            self.blockchain_handler.upload_video_hash(cameraIndex, concatenated_hash, date_timestamp, timeDescription)
+            tx_receipt = self.blockchain_handler.upload_video_hash(cameraIndex, concatenated_hash, date_timestamp, timeDescription)
+            if tx_receipt:
+                # Lấy transaction hash (string) từ tx_receipt 
+                tx_hash = tx_receipt['transactionHash'].hex()
+                print("Transaction hash:", tx_hash)
+                # update all detections with tx_hash and concatenated_hash in that date
+                self.mongo_handler.update_object_detection_with_tx_hash_and_hash_by_date(current_date, tx_hash, concatenated_hash, date_timestamp, timeDescription)
+
 
         # Xử lý dữ liệu và ghi lên Blockchain cho từng camera về ConnectionLoss
         for cameraIndex, losses in connection_losses_by_camera.items():
@@ -76,7 +83,13 @@ class DataProcessor:
             print("Ghi lên Blockchain: ", cameraIndex, concatenated_losses, total_loss_per_day, date_timestamp)
             
             # Ghi lên Blockchain
-            self.blockchain_handler.upload_connection_losses(cameraIndex, concatenated_losses, total_loss_per_day, date_timestamp)
+            tx_receipt = self.blockchain_handler.upload_connection_losses(cameraIndex, concatenated_losses, total_loss_per_day, date_timestamp)
+            if tx_receipt:
+                # Lấy transaction hash (string) từ tx_receipt 
+                tx_hash = tx_receipt['transactionHash'].hex()
+                print("Transaction hash:", tx_hash)
+                # update all losses with tx_hash and concatenated_losses in that date
+                self.mongo_handler.update_connection_loss_with_tx_hash_and_concatenated_losses_by_date(current_date, tx_hash, concatenated_losses, total_loss_per_day, date_timestamp)
 
     def hash_video(self, video_data):
         # Hash video_data và trả về hash
