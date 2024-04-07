@@ -173,33 +173,6 @@ class RTSPProcessor:
         except Exception as e:
             print(f"Lỗi khi xóa video: {e}")
 
-    def compress_video(self, video_path):
-        # Đọc video gốc
-        cap = cv2.VideoCapture(video_path)
-
-        # Khởi tạo VideoWriter cho video nén
-        # compressed_video_path = video_path.replace('.mp4', '_compressed.mp4')
-        # fourcc = cv2.VideoWriter_fourcc(*'avc1')  # Sử dụng codec H.264
-        # out = cv2.VideoWriter(compressed_video_path, fourcc, 30, (int(cap.get(3)), int(cap.get(4))))
-        out = cv2.VideoWriter(video_path, cv2.VideoWriter_fourcc(*'XVID'), 30, (frame.shape[1], frame.shape[0]))
-
-        # Nén video frame by frame
-        while True:
-            ret, frame = cap.read()
-            if not ret:
-                break
-            out.write(frame)
-
-        # Giải phóng tài nguyên
-        cap.release()
-        out.release()
-
-        # Xóa video gốc
-        os.remove(video_path)
-
-        # Đổi tên video nén thành tên gốc
-        os.rename(compressed_video_path, video_path)
-
     def capture_and_upload_image(self, rtsp_link):
         while True:
             # Tính toán thời điểm chụp ảnh ngẫu nhiên trong mỗi giờ
