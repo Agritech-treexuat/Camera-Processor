@@ -1,13 +1,11 @@
 import cv2
 import threading
 from datetime import datetime
-from pymongo import MongoClient
 from yolov8 import YOLOv8
-from db_handler import MongoDBHandler
+from db_handler.mongodb_handler import MongoDBHandler
 import time
 from datetime import timedelta
 import os
-import boto3
 from random import randint
 import cloudinary
 import cloudinary.uploader
