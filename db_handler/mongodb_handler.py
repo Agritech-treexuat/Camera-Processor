@@ -89,12 +89,14 @@ class MongoDBHandler:
         cursor = self.db.Cameras.find_one({"_id": ObjectId(camera_id)})
         return cursor["cameraIndex"]
     
-    def update_object_detection_with_tx_hash_and_hash_by_date(self, date, tx_hash, concatenated_hash, date_timestamp, timeDescription):
+    def update_object_detection_with_tx_hash_and_hash_by_date(self, date, tx_hash, concatenated_hash, date_timestamp, timeDescription, camera_id):
         start_of_day = datetime.combine(date, datetime.min.time())
         end_of_day = start_of_day + timedelta(days=1)
-        self.db.ObjectDetections.update_many({"start_time": {"$gte": start_of_day, "$lt": end_of_day}}, {"$set": {"tx_hash": tx_hash, "concatenated_hash": concatenated_hash, "date_timestamp": date_timestamp, "timeDescription": timeDescription}})
-    
-    def update_connection_loss_with_tx_hash_and_concatenated_losses_by_date(self, date, tx_hash, concatenated_losses, total_loss_per_day, date_timestamp):
+        self.db.ObjectDetections.update_many({"camera_id": ObjectId(camera_id), "start_time": {"$gte": start_of_day, "$lt": end_of_day}}, {"$set": {"tx_hash": tx_hash, "concatenated_hash": concatenated_hash, "date_timestamp": date_timestamp, "timeDescription": timeDescription}})
+
+    def update_connection_loss_with_tx_hash_and_concatenated_losses_by_date(self, date, tx_hash, concatenated_losses, total_loss_per_day, date_timestamp, camera_id):
         start_of_day = datetime.combine(date, datetime.min.time())
         end_of_day = start_of_day + timedelta(days=1)
-        self.db.ConnectionLosses.update_many({"start_time": {"$gte": start_of_day, "$lt": end_of_day}}, {"$set": {"tx_hash": tx_hash, "concatenated_losses": concatenated_losses, "total_loss_per_day": total_loss_per_day, "date_timestamp": date_timestamp}})
+        self.db.ConnectionLosses.update_many({"camera_id": ObjectId(camera_id), "start_time": {"$gte": start_of_day, "$lt": end_of_day}}, {"$set": {"tx_hash": tx_hash, "concatenated_losses": concatenated_losses, "total_loss_per_day": total_loss_per_day, "date_timestamp": date_timestamp}})
+    def update_image_info_with_tx_hash_and_hash_by_date(self, date_timestamp, tx_hash, image_hash, timeDescription, camera_id, capture_time):
+        self.db.Images.update_many({"camera_id": ObjectId(camera_id), "capture_time": capture_time}, {"$set": {"tx_hash": tx_hash, "image_hash": image_hash, "timeDescription": timeDescription}})

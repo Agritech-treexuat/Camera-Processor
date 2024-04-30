@@ -64,3 +64,26 @@ class BlockchainHandler:
         except TimeExhausted as e:
             print("Timeout while waiting for transaction receipt:", e)
             return None
+    
+    def upload_image_hash(self, cameraIndex, image_hash, date_timestamp, timeDescription):
+        # Ghi lên Blockchain image_hash, camera_id, và date_timestamp
+        try:
+            nonce = self.web3.eth.get_transaction_count(self.caller)
+
+            # Call your function
+            call_function = self.contract_instance.functions.addImage(cameraIndex, image_hash, date_timestamp, timeDescription).build_transaction({"chainId": self.Chain_id, "from": self.caller, "nonce": nonce})
+
+            # Sign transaction
+            signed_tx = self.web3.eth.account.sign_transaction(call_function, private_key=self.private_key)
+
+            # Send transaction
+            send_tx = self.web3.eth.send_raw_transaction(signed_tx.rawTransaction)
+
+            # Wait for transaction receipt
+            tx_receipt = self.web3.eth.wait_for_transaction_receipt(send_tx)
+
+            print("Transaction receipt:", tx_receipt)
+            return tx_receipt
+        except TimeExhausted as e:
+            print("Timeout while waiting for transaction receipt:", e)
+            return None

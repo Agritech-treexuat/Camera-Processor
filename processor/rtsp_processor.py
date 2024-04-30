@@ -11,6 +11,7 @@ import cloudinary
 import cloudinary.uploader
 import cloudinary.api
 from dotenv import load_dotenv
+from processor.data_upload_blockchain_processer import DataProcessor
 
 
 load_dotenv(override=True)
@@ -18,12 +19,14 @@ load_dotenv(override=True)
 os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = "rtsp_transport;udp"
 
 class RTSPProcessor:
-    def __init__(self, frame_skip, mongo_uri, db_name):
+    def __init__(self, frame_skip, mongo_uri, db_name, blockchain_handler):
         self.rtsp_links = []
         self.yolov8_detector = YOLOv8("models/yolov8m.onnx", conf_thres=0.5, iou_thres=0.5)
         self.db_handler = MongoDBHandler(mongo_uri, db_name)
         self.load_rtsp_links()
         self.frame_skip = frame_skip
+        self.blockchain_handler = blockchain_handler
+        self.data_processor = DataProcessor(self.db_handler, self.blockchain_handler)
 
     def load_rtsp_links(self):
         self.rtsp_links = self.db_handler.get_rtsp_links()
@@ -221,9 +224,13 @@ class RTSPProcessor:
                 }
                 self.db_handler.db.Images.insert_one(image_info)
                 print("Saved image info to MongoDB")
+                try:
+                    # Process and upload image to Blockchain
+                    self.data_processor.process_image_and_upload_to_blockchain(frame, image_info)
+                except Exception as e:
+                    print(f"Error processing and uploading image to Blockchain: {e}")
             except Exception as e:
                 print(f"Error uploading image to Cloudinary: {e}")
-
 
             # Xóa ảnh tạm sau khi upload
             os.remove(temp_image_path)
