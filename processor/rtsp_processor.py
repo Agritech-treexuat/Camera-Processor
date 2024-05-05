@@ -207,10 +207,17 @@ class RTSPProcessor:
             while datetime.now() < capture_time:
                 time.sleep(1)
 
-            # Chụp frame tại thời điểm đã chọn từ luồng RTSP
-            cap = cv2.VideoCapture(rtsp_link, cv2.CAP_FFMPEG)
-            ret, frame = cap.read()
-            cap.release()
+            try:
+                # Chụp frame tại thời điểm đã chọn từ luồng RTSP
+                cap = cv2.VideoCapture(rtsp_link, cv2.CAP_FFMPEG)
+                ret, frame = cap.read()
+                cap.release()
+                if not ret:
+                    print(f"Lỗi khi chụp frame từ {rtsp_link}")
+                    continue
+            except Exception as e:
+                print(f"Lỗi khi chụp frame từ {rtsp_link}: {e}")
+                continue
 
             # Tạo tên file ảnh dựa trên thời gian chụp và camera ID
             camera_id = self.db_handler.db.Cameras.find_one({"rtsp_link": rtsp_link}, {"_id": 1})["_id"]
