@@ -19,7 +19,7 @@ load_dotenv(override=True)
 os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = "rtsp_transport;udp"
 
 class RTSPProcessor:
-    def __init__(self, frame_skip, mongo_uri, db_name, blockchain_handler):
+    def __init__(self, frame_skip, mongo_uri, db_name, blockchain_handler=None):
         self.rtsp_links = []
         self.yolov8_detector = YOLOv8("models/yolov8m.onnx", conf_thres=0.5, iou_thres=0.5)
         self.db_handler = MongoDBHandler(mongo_uri, db_name)

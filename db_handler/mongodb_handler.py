@@ -23,8 +23,8 @@ class MongoDBHandler:
         self.db.ObjectDetections.insert_one(log_data)
     
     def insert_connection_log(self, camera_id, start_time, end_time):
-        start_time = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(start_time))
-        end_time = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(end_time))
+        start_time = datetime.strptime(start_time, '%Y-%m-%d_%H-%M-%S')
+        end_time = datetime.strptime(end_time, '%Y-%m-%d_%H-%M-%S')
         log_data = {
             "camera_id": camera_id,
             "start_time": start_time,
