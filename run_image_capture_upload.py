@@ -1,7 +1,9 @@
 from processor.rtsp_processor import RTSPProcessor
 from db_handler.mongodb_handler import MongoDBHandler
+from db_handler.blockchain_handler import BlockchainHandler
 from dotenv import load_dotenv
 import os
+from constants import abi
 
 load_dotenv(override=True)
 
@@ -22,9 +24,17 @@ def main():
     print(f"Connecting to MongoDB...")
     db_name = MONGO_DB_NAME
     frame_skip = 10
+
+    contract_address = os.getenv("VIDEO_CONTRACT_ADDRESS")
+    private_key = os.getenv("WALLET_PRIVATE_KEY")
+    public_key = os.getenv("WALLET_PUBLIC_KEY")
+    provider_url = os.getenv("PROVIDER_URL")
+
+
+    blockchain_handler = BlockchainHandler(contract_address, abi, public_key, private_key, provider_url)
         
     # 2. Capture and Upload Images
-    rtsp_processor = RTSPProcessor(frame_skip, mongo_uri, db_name)
+    rtsp_processor = RTSPProcessor(frame_skip, mongo_uri, db_name, blockchain_handler)
     rtsp_processor.start_capture_and_upload_threads()
 
 if __name__ == "__main__":
