@@ -111,9 +111,12 @@ class RTSPProcessor:
         connection_lost_time = None
         continuous_connection_lost_time = None
         real_connection_loss = False
+        print("cap is opened", cap.isOpened())
 
         while cap.isOpened():
             ret, frame = cap.read()
+            print("ret", ret)
+            print("frame", frame)
             if not ret:
                 if not connection_lost:
                     connection_lost = True
