@@ -110,3 +110,10 @@ class MongoDBHandler:
         return image_urls
     def insert_video_urls(self, projectId, video_urls):
         self.db.Projects.update_one({"_id": ObjectId(projectId)}, {"$set": {"video_urls": video_urls}})
+    def insert_image(self, camera_id, capture_time, image_url):
+        image_data = {
+            "camera_id": ObjectId(camera_id),
+            "capture_time": capture_time,
+            "image_url": image_url
+        }
+        self.db.Images.insert_one(image_data)

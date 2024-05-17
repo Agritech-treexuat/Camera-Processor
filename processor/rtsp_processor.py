@@ -300,3 +300,57 @@ class RTSPProcessor:
             thread.start()
             threads.append(thread)
         return threads
+    
+    def extract_and_upload_frames(self, video_path, camera_id):
+        cap = cv2.VideoCapture(video_path)
+        fps = cap.get(cv2.CAP_PROP_FPS)
+        frame_interval = int(fps / 24)  # Lấy 24 frame mỗi giây
+
+        frame_count = 0
+        start_date = datetime(2024, 2, 2)  # Specify the desired start date
+        current_time = start_date.replace(hour=0, minute=0, second=0, microsecond=0)
+        delta = timedelta(hours=1)  # Each frame will represent a time point within a day
+
+        while cap.isOpened():
+            ret, frame = cap.read()
+            if not ret:
+                break
+
+            if frame_count % frame_interval == 0:
+                # Tạo tên file ảnh dựa trên thời gian chụp và camera ID
+                image_filename = f"{camera_id}_{current_time.strftime('%Y-%m-%d_%H-%M-%S')}.jpg"
+                temp_image_path = os.path.join("./temp_images", image_filename)
+                
+                if not os.path.exists("./temp_images"):
+                    os.makedirs("./temp_images")
+
+                # Lưu frame vào thư mục tạm thời
+                cv2.imwrite(temp_image_path, frame)
+
+                try:
+                    # Upload image to Cloudinary
+                    response = cloudinary.uploader.upload(temp_image_path, 
+                        folder=f"captured_images/{camera_id}",
+                        public_id=image_filename,
+                    )
+                    print(f"Uploaded image {image_filename} to Cloudinary")
+
+                    # Get image URL from Cloudinary response
+                    image_url = response['secure_url']
+
+                    # Save image info to MongoDB
+                    self.db_handler.insert_image(camera_id, current_time, image_url)
+                    print("Saved image info to MongoDB")
+                except Exception as e:
+                    print(f"Error uploading image to Cloudinary: {e}")
+                
+                # Xóa ảnh tạm sau khi upload
+                os.remove(temp_image_path)
+
+                # Tăng thời gian cho khung hình tiếp theo
+                current_time += delta
+
+            frame_count += 1
+        
+        cap.release()
+        print("Finished processing video.")

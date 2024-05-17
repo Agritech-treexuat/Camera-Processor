@@ -13,12 +13,21 @@ class VideoMakerProcessor:
 
     def download_images(self, image_urls):
         image_files = []
+        if not os.path.exists('./image_tmp'):
+            os.makedirs('./image_tmp')
         for i, url in enumerate(image_urls):
             response = requests.get(url)
-            image_path = f'image_{i}.jpg'
+            image_path = f'./image_tmp/image_{i}.jpg'
             with open(image_path, 'wb') as file:
                 file.write(response.content)
             image_files.append(image_path)
+
+        # # read from local image_tmp dir
+        # for i in range(len(image_urls)):
+        #     image_path = f'./image_tmp/image_{i}.jpg'
+        #     if os.path.exists(image_path):
+        #         image_files.append(image_path)
+        
         return image_files
 
     def create_video_from_images(self, image_files, output_path):
@@ -53,14 +62,15 @@ class VideoMakerProcessor:
 
             for camera_id in camera_ids:
                 image_urls = self.db_handler.get_image_urls(camera_id, start_date)
+                # print("files: ", f'{project_id}_{str(camera_id)}.mp4')
 
                 if image_urls:
                     image_files = self.download_images(image_urls)
-                    video_path = self.create_video_from_images(image_files, f'{project_id}.mp4')
+                    video_path = self.create_video_from_images(image_files, f'{project_id}_{str(camera_id)}.mp4')
                     video_url = self.upload_video_to_cloudinary(video_path)
                     project_video_urls.append(video_url)
 
-                    self.clean_up_files(image_files + [f'{project_id}.mp4'])
+                    self.clean_up_files(image_files + [f'{project_id}_{str(camera_id)}.mp4'])
 
             self.db_handler.insert_video_urls(project_id, project_video_urls)
 
