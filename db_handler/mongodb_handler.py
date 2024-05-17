@@ -100,3 +100,20 @@ class MongoDBHandler:
         self.db.ConnectionLosses.update_many({"camera_id": ObjectId(camera_id), "start_time": {"$gte": start_of_day, "$lt": end_of_day}}, {"$set": {"tx_hash": tx_hash, "concatenated_losses": concatenated_losses, "total_loss_per_day": total_loss_per_day, "date_timestamp": date_timestamp}})
     def update_image_info_with_tx_hash_and_hash_by_date(self, date_timestamp, tx_hash, image_hash, timeDescription, camera_id, capture_time):
         self.db.Images.update_many({"camera_id": ObjectId(camera_id), "capture_time": capture_time}, {"$set": {"tx_hash": tx_hash, "image_hash": image_hash, "timeDescription": timeDescription}})
+    def get_projects_in_progress(self):
+        projects = self.db.Projects.find({"status": "inProgress"})
+        return projects
+
+    def get_image_urls(self, camera_id, start_date):
+        images = self.db.Images.find({"camera_id": ObjectId(camera_id), "capture_time": {"$gt": start_date}})
+        image_urls = [image['image_url'] for image in images]
+        return image_urls
+    def insert_video_urls(self, projectId, video_urls):
+        self.db.Projects.update_one({"_id": ObjectId(projectId)}, {"$set": {"video_urls": video_urls}})
+    def insert_image(self, camera_id, capture_time, image_url):
+        image_data = {
+            "camera_id": ObjectId(camera_id),
+            "capture_time": capture_time,
+            "image_url": image_url
+        }
+        self.db.Images.insert_one(image_data)

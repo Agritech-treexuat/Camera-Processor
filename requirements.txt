@@ -8,3 +8,4 @@ boto3
 web3
 schedule
 cloudinary
+moviepy
