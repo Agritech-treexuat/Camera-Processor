@@ -105,14 +105,13 @@ class RTSPProcessor:
         camera_id = self.db_handler.db.Cameras.find_one({"rtsp_link": rtsp_link}, {"_id": 1})["_id"]
 
         # set desired quality as 720p
-        options = {"STREAM_RESOLUTION": "720p"}
+        # options = {"STREAM_RESOLUTION": "720p"}
 
         # cap = cv2.VideoCapture(rtsp_link)
         stream = CamGear(
             source=rtsp_link,
             stream_mode=True,
             logging=True,
-            **options
         ).start()
 
         person_detected = False
@@ -128,6 +127,8 @@ class RTSPProcessor:
 
         while True:
             current_frame_count += 1
+            if (current_frame_count % 1000 == 0):
+                print(f"current_frame_count: {current_frame_count}")
             frame = stream.read()
 
             # check for 'q' key if pressed
@@ -164,7 +165,7 @@ class RTSPProcessor:
                     real_connection_loss = False
                     continuous_connection_lost_time = None  # Đặt lại thời gian mất kết nối liên tục
 
-            cv2.imshow("Output Frame", frame) 
+            # cv2.imshow("Output Frame", frame) 
 
             if self.process_yolo(frame):
                 last_detection_time = datetime.now()  # Cập nhật thời gian phát hiện gần nhất
