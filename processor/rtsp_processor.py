@@ -163,7 +163,9 @@ class RTSPProcessor:
                     self.db_handler.insert_connection_log(camera_id, connection_lost_time, reconnection_time)
                     real_connection_loss = False
                     continuous_connection_lost_time = None  # Đặt lại thời gian mất kết nối liên tục
-                
+
+            cv2.imshow("Output Frame", frame) 
+
             if self.process_yolo(frame):
                 last_detection_time = datetime.now()  # Cập nhật thời gian phát hiện gần nhất
                 if not person_detected:
@@ -189,12 +191,13 @@ class RTSPProcessor:
             if recording:
                 # Ghi video nếu đang trong trạng thái ghi
                 if start_time is not None:
-                    video_path = f"./detected_videos/{camera_id}_{start_time}.webm"
+                    video_path = f"./detected_videos/{camera_id}_{start_time}.avi"
                     if not os.path.exists(os.path.dirname(video_path)):
                         os.makedirs(os.path.dirname(video_path))  # Tạo thư mục nếu chưa tồn tại
-
-                    fourcc = cv2.VideoWriter_fourcc(*'vp80')
-                    out = cv2.VideoWriter(video_path, fourcc, 30 / self.frame_skip, (frame.shape[1], frame.shape[0]))
+                    
+                    if not os.path.exists(video_path):
+                        fourcc = cv2.VideoWriter_fourcc(*'XVID')
+                        out = cv2.VideoWriter(video_path, fourcc, 30 / self.frame_skip, (frame.shape[1], frame.shape[0]))
                     
                     if current_frame_count % self.frame_skip == 0:
                         out.write(frame)
