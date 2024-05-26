@@ -4,7 +4,6 @@ from datetime import datetime
 from yolov8 import YOLOv8
 from db_handler.mongodb_handler import MongoDBHandler
 import time
-from datetime import timedelta
 import os
 from random import randint
 import cloudinary
@@ -12,6 +11,12 @@ import cloudinary.uploader
 import cloudinary.api
 from dotenv import load_dotenv
 from processor.data_upload_blockchain_processer import DataProcessor
+from datetime import datetime, timedelta, timezone
+import urllib
+import m3u8
+import streamlink
+from vidgear.gears import CamGear
+
 
 
 load_dotenv(override=True)
@@ -99,7 +104,16 @@ class RTSPProcessor:
         # Lấy camera_id từ MongoDB dựa trên rtsp_link
         camera_id = self.db_handler.db.Cameras.find_one({"rtsp_link": rtsp_link}, {"_id": 1})["_id"]
 
-        cap = cv2.VideoCapture(rtsp_link, cv2.CAP_FFMPEG)
+        # set desired quality as 720p
+        options = {"STREAM_RESOLUTION": "720p"}
+
+        # cap = cv2.VideoCapture(rtsp_link)
+        stream = CamGear(
+            source=rtsp_link,
+            stream_mode=True,
+            logging=True,
+            **options
+        ).start()
 
         person_detected = False
         last_detection_time = None
@@ -111,26 +125,31 @@ class RTSPProcessor:
         connection_lost_time = None
         continuous_connection_lost_time = None
         real_connection_loss = False
-        print("cap is opened", cap.isOpened())
 
-        while cap.isOpened():
-            ret, frame = cap.read()
-            print("ret", ret)
-            print("frame", frame)
-            if not ret:
+        while True:
+            current_frame_count += 1
+            frame = stream.read()
+
+            # check for 'q' key if pressed
+            key = cv2.waitKey(1) & 0xFF
+            if key == ord("q"):
+                break
+            
+            if frame is None:
                 if not connection_lost:
+                    print("current_frame_count:", current_frame_count)
                     connection_lost = True
                     connection_lost_time = datetime.now()  # Ghi thời điểm mất kết nối
                     continuous_connection_lost_time = datetime.now()  # Cập nhật thời gian mất kết nối liên tục
                     print(f"Mất kết nối với camera {rtsp_link} lúc {connection_lost_time}")
                 else:
                     # Kiểm tra nếu đã mất kết nối liên tục trong 1 phút
+                    # print("continuous_connection_lost_time:", continuous_connection_lost_time)
                     elapsed_time_since_last_lost_connection = datetime.now() - continuous_connection_lost_time
                     if elapsed_time_since_last_lost_connection.total_seconds() > 60:
-                        print(f"Mất kết nối liên tục với camera {rtsp_link} trong 1 phút")
+                        # print(f"Mất kết nối liên tục với camera {rtsp_link} trong 1 phút")
                         # Thực hiện tác vụ khi mất kết nối liên tục trong 1 phút
                         # Ví dụ: ghi log, thông báo, thực hiện khởi động lại camera, ...
-                        continuous_connection_lost_time = None  # Đặt lại thời gian mất kết nối liên tục
                         real_connection_loss = True
 
                 continue
@@ -140,34 +159,32 @@ class RTSPProcessor:
                     reconnection_time = datetime.now()  # Ghi thời điểm kết nối lại
                     print(f"Kết nối lại với camera {rtsp_link} lúc {reconnection_time}")
                     # Lưu thông tin mất kết nối vào collection ConnectionLoss
+                    print("Lưu thông tin mất kết nối vào collection ConnectionLoss")
                     self.db_handler.insert_connection_log(camera_id, connection_lost_time, reconnection_time)
+                    real_connection_loss = False
+                    continuous_connection_lost_time = None  # Đặt lại thời gian mất kết nối liên tục
                 
-
-            current_time = cap.get(cv2.CAP_PROP_POS_MSEC) / 1000
-
-            if int(current_time) > time_counter:
-                time_counter = int(current_time)
-                if self.process_yolo(frame):
-                    last_detection_time = datetime.now()  # Cập nhật thời gian phát hiện gần nhất
-                    if not person_detected:
-                        person_detected = True
-                        start_time = last_detection_time.strftime("%Y-%m-%d_%H-%M-%S")
-                        recording = True  # Bắt đầu ghi video khi phát hiện người
-                        print(f"Phát hiện người tại {rtsp_link} lúc {start_time}")
-                else:
-                    # Kiểm tra nếu đã vượt quá 1 phút kể từ lần cuối cùng phát hiện người
-                    if person_detected and last_detection_time is not None:
-                        elapsed_time_since_last_detection = datetime.now() - last_detection_time
-                        if elapsed_time_since_last_detection.total_seconds() > 60:
-                            person_detected = False
-                            print(f"Ngừng phát hiện người tại {rtsp_link}")
-                            end_time = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-                            if recording:
-                                out.release()  # Đảm bảo rằng video cuối cùng được đóng sau khi kết thúc luồng
-                            recording = False  # Dừng ghi video khi không phát hiện nữa
-                            # Upload video phát hiện lên Cloudinary
-                            upload_thread = threading.Thread(target=self.upload_video_to_cloudinary, args=(video_path, camera_id, start_time, end_time))
-                            upload_thread.start()
+            if self.process_yolo(frame):
+                last_detection_time = datetime.now()  # Cập nhật thời gian phát hiện gần nhất
+                if not person_detected:
+                    person_detected = True
+                    start_time = last_detection_time.strftime("%Y-%m-%d_%H-%M-%S")
+                    recording = True  # Bắt đầu ghi video khi phát hiện người
+                    print(f"Phát hiện người tại {rtsp_link} lúc {start_time}")
+            else:
+                # Kiểm tra nếu đã vượt quá 1 phút kể từ lần cuối cùng phát hiện người
+                if person_detected and last_detection_time is not None:
+                    elapsed_time_since_last_detection = datetime.now() - last_detection_time
+                    if elapsed_time_since_last_detection.total_seconds() > 2:
+                        person_detected = False
+                        print(f"Ngừng phát hiện người tại {rtsp_link} with time {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+                        end_time = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+                        if recording:
+                            out.release()  # Đảm bảo rằng video cuối cùng được đóng sau khi kết thúc luồng
+                        recording = False  # Dừng ghi video khi không phát hiện nữa
+                        # Upload video phát hiện lên Cloudinary
+                        upload_thread = threading.Thread(target=self.upload_video_to_cloudinary, args=(video_path, camera_id, start_time, end_time))
+                        upload_thread.start()
 
             if recording:
                 # Ghi video nếu đang trong trạng thái ghi
@@ -175,9 +192,9 @@ class RTSPProcessor:
                     video_path = f"./detected_videos/{camera_id}_{start_time}.webm"
                     if not os.path.exists(os.path.dirname(video_path)):
                         os.makedirs(os.path.dirname(video_path))  # Tạo thư mục nếu chưa tồn tại
-                    if not os.path.exists(video_path):
-                        fourcc = cv2.VideoWriter_fourcc(*'vp80')
-                        out = cv2.VideoWriter(video_path, fourcc, 30 / self.frame_skip, (frame.shape[1], frame.shape[0]))
+
+                    fourcc = cv2.VideoWriter_fourcc(*'vp80')
+                    out = cv2.VideoWriter(video_path, fourcc, 30 / self.frame_skip, (frame.shape[1], frame.shape[0]))
                     
                     if current_frame_count % self.frame_skip == 0:
                         out.write(frame)
