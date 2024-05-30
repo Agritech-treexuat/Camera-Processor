@@ -103,14 +103,12 @@ class DataProcessor:
         image_hash = self.hash_image(frame)
         date_timestamp = int(datetime.timestamp(datetime.now()))
         timeDescription = f"Capture at Time: {image_info['capture_time']}"
-        print("Ghi lên Blockchain: ", cameraIndex, image_hash, date_timestamp, timeDescription)
 
         # Ghi lên Blockchain
         tx_receipt = self.blockchain_handler.upload_image_hash(cameraIndex, image_hash, date_timestamp, timeDescription)
         if tx_receipt:
             # Lấy transaction hash (string) từ tx_receipt 
             tx_hash = tx_receipt['transactionHash'].hex()
-            print("Transaction hash:", tx_hash)
             # update all losses with tx_hash and concatenated_losses in that date
             self.mongo_handler.update_image_info_with_tx_hash_and_hash_by_date(date_timestamp, tx_hash, image_hash, timeDescription, camera_id, capture_time)
         else:

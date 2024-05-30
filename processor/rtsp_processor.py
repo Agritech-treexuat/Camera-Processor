@@ -108,6 +108,7 @@ class RTSPProcessor:
         # options = {"STREAM_RESOLUTION": "720p"}
 
         # cap = cv2.VideoCapture(rtsp_link)
+        
         stream = CamGear(
             source=rtsp_link,
             stream_mode=True,
@@ -178,7 +179,7 @@ class RTSPProcessor:
                 # Kiểm tra nếu đã vượt quá 1 phút kể từ lần cuối cùng phát hiện người
                 if person_detected and last_detection_time is not None:
                     elapsed_time_since_last_detection = datetime.now() - last_detection_time
-                    if elapsed_time_since_last_detection.total_seconds() > 2:
+                    if elapsed_time_since_last_detection.total_seconds() > 60:
                         person_detected = False
                         print(f"Ngừng phát hiện người tại {rtsp_link} with time {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
                         end_time = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
@@ -233,12 +234,36 @@ class RTSPProcessor:
 
             try:
                 # Chụp frame tại thời điểm đã chọn từ luồng RTSP
-                cap = cv2.VideoCapture(rtsp_link, cv2.CAP_FFMPEG)
-                ret, frame = cap.read()
-                cap.release()
-                if not ret:
+                stream = CamGear(
+                    source=rtsp_link,
+                    stream_mode=True,
+                    logging=True,
+                ).start()
+                frame = stream.read()
+                stream.stop()
+                if frame is None:
                     print(f"Lỗi khi chụp frame từ {rtsp_link}")
+                    # try to read the next 5 frame
+                    for i in range(5):
+                        stream = CamGear(
+                            source=rtsp_link,
+                            stream_mode=True,
+                            logging=True,
+                        ).start()
+                        frame = stream.read()
+                        stream.stop()
+                        if frame is not None:
+                            break
+                        time.sleep(1)
+                if frame is None:
+                    print(f"Lỗi khi chụp frame từ {rtsp_link} for 5 times")
                     continue
+                # cap = cv2.VideoCapture(rtsp_link, cv2.CAP_FFMPEG)
+                # ret, frame = cap.read()
+                # cap.release()
+                # if not ret:
+                #     print(f"Lỗi khi chụp frame từ {rtsp_link}")
+                #     continue
             except Exception as e:
                 print(f"Lỗi khi chụp frame từ {rtsp_link}: {e}")
                 continue
