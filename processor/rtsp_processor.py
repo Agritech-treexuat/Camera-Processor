@@ -104,16 +104,37 @@ class RTSPProcessor:
         # Lấy camera_id từ MongoDB dựa trên rtsp_link
         camera_id = self.db_handler.db.Cameras.find_one({"rtsp_link": rtsp_link}, {"_id": 1})["_id"]
 
-        # set desired quality as 720p
-        # options = {"STREAM_RESOLUTION": "720p"}
+        connection_lost = False
+        connection_lost_time = None
 
-        # cap = cv2.VideoCapture(rtsp_link)
-        
-        stream = CamGear(
-            source=rtsp_link,
-            stream_mode=True,
-            logging=True,
-        ).start()
+        while True:
+            try:
+                stream = CamGear(
+                    source=rtsp_link,
+                    stream_mode=True,
+                    logging=True,
+                ).start()
+                if connection_lost:
+                    reconnection_time = datetime.now()
+                    self.db_handler.insert_connection_log(camera_id, connection_lost_time, reconnection_time)
+                    print(f"Kết nối lại thành công với camera {rtsp_link} lúc {reconnection_time}")
+                    connection_lost = False
+                break
+            except Exception as e:
+                print(f"Lỗi khi mở luồng RTSP: {e}")
+                if not connection_lost:
+                    connection_lost = True
+                    connection_lost_time = datetime.now()
+                    print(f"Mất kết nối với camera {rtsp_link} lúc {connection_lost_time}")
+                # Kiểm tra nếu đến cuối ngày mà vẫn không kết nối lại được
+                if connection_lost:
+                    current_time = datetime.now()
+                    if current_time.hour == 23 and current_time.minute >= 50:
+                        reconnection_time = current_time.replace(hour=23, minute=59, second=59)
+                        self.db_handler.insert_connection_log(camera_id, connection_lost_time, reconnection_time)
+                        print(f"Lưu thông tin mất kết nối cuối ngày cho camera {rtsp_link} từ {connection_lost_time} đến {reconnection_time}")
+                        connection_lost = False
+                time.sleep(600)  # Đợi 10 phút trước khi thử lại
 
         person_detected = False
         last_detection_time = None
@@ -130,7 +151,11 @@ class RTSPProcessor:
             current_frame_count += 1
             if (current_frame_count % 1000 == 0):
                 print(f"current_frame_count: {current_frame_count}")
-            frame = stream.read()
+            try:
+                frame = stream.read()
+            except Exception as e:
+                print(f"Lỗi khi đọc frame từ luồng RTSP: {e}")
+                frame = None
 
             # check for 'q' key if pressed
             key = cv2.waitKey(1) & 0xFF
@@ -146,12 +171,8 @@ class RTSPProcessor:
                     print(f"Mất kết nối với camera {rtsp_link} lúc {connection_lost_time}")
                 else:
                     # Kiểm tra nếu đã mất kết nối liên tục trong 1 phút
-                    # print("continuous_connection_lost_time:", continuous_connection_lost_time)
                     elapsed_time_since_last_lost_connection = datetime.now() - continuous_connection_lost_time
                     if elapsed_time_since_last_lost_connection.total_seconds() > 60:
-                        # print(f"Mất kết nối liên tục với camera {rtsp_link} trong 1 phút")
-                        # Thực hiện tác vụ khi mất kết nối liên tục trong 1 phút
-                        # Ví dụ: ghi log, thông báo, thực hiện khởi động lại camera, ...
                         real_connection_loss = True
 
                 continue
