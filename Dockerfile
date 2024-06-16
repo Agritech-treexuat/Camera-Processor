@@ -15,4 +15,4 @@ RUN apt-get update && apt-get install -y libgl1-mesa-glx
 COPY . .
 
 # Command to run the application
-CMD ["python", "main.py"]
+CMD ["python", "run_rtsp_processor.py"]
