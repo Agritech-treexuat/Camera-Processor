@@ -42,8 +42,9 @@ def main():
     data_processor = DataProcessor(mongo_handler, blockchain_handler)
 
     # Lập lịch cho công việc chạy vào 12h đêm mỗi ngày
-    schedule.every().day.at("22:25").do(data_processor.process_data_and_upload_to_blockchain)
-    # data_processor.process_data_and_upload_to_blockchain()
+    # schedule.every().day.at("22:25").do(data_processor.process_data_and_upload_to_blockchain)
+    print("Start processing data and upload to blockchain")
+    data_processor.process_data_and_upload_to_blockchain()
 
     # Vòng lặp chạy lập lịch
     while True:

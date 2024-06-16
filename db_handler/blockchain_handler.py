@@ -36,7 +36,6 @@ class BlockchainHandler:
             # Wait for transaction receipt
             tx_receipt = self.web3.eth.wait_for_transaction_receipt(send_tx)
 
-            print("Transaction receipt:", tx_receipt)
             return tx_receipt
         except TimeExhausted as e:
             print("Timeout while waiting for transaction receipt:", e)
@@ -59,7 +58,6 @@ class BlockchainHandler:
             # Wait for transaction receipt
             tx_receipt = self.web3.eth.wait_for_transaction_receipt(send_tx)
 
-            print("Transaction receipt:", tx_receipt)
             return tx_receipt
         except TimeExhausted as e:
             print("Timeout while waiting for transaction receipt:", e)
@@ -82,7 +80,6 @@ class BlockchainHandler:
             # Wait for transaction receipt
             tx_receipt = self.web3.eth.wait_for_transaction_receipt(send_tx)
 
-            print("Transaction receipt:", tx_receipt)
             return tx_receipt
         except TimeExhausted as e:
             print("Timeout while waiting for transaction receipt:", e)

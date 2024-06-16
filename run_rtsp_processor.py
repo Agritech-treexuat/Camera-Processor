@@ -21,7 +21,7 @@ def main():
         mongo_uri = MONGO_URI
     print(f"Connecting to MongoDB...")
     db_name = MONGO_DB_NAME
-    frame_skip = 10
+    frame_skip = 1
     
     # 1. RTSP Processor
     rtsp_processor = RTSPProcessor(frame_skip, mongo_uri, db_name)

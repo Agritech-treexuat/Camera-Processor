@@ -11,6 +11,8 @@ class DataProcessor:
     def process_data_and_upload_to_blockchain(self):
         # Lấy ngày hôm nay
         current_date = datetime.now().date()
+        # current date = 5/5
+        # current_date = datetime.strptime("2024-05-06", "%Y-%m-%d")
 
         # Lấy dữ liệu ObjectDetections của ngày hôm nay
         object_detections = self.mongo_handler.load_object_detection_by_date(current_date)
@@ -36,6 +38,7 @@ class DataProcessor:
                 connection_losses_by_camera[cameraIndex] = []
             connection_losses_by_camera[cameraIndex].append(loss)
 
+        # print("Object detections by camera:", object_detections_by_camera)
         # Xử lý dữ liệu và ghi lên Blockchain cho từng camera
         for cameraIndex, detections in object_detections_by_camera.items():
             # Tải video từ video_url và ghép nối lại
@@ -70,10 +73,16 @@ class DataProcessor:
                 tx_hash = tx_receipt['transactionHash'].hex()
                 print("Transaction hash:", tx_hash)
                 # update all detections with tx_hash and concatenated_hash in that date
-                self.mongo_handler.update_object_detection_with_tx_hash_and_hash_by_date(current_date, tx_hash, concatenated_hash, date_timestamp, timeDescription, camera_id)
+                try:
+                    self.mongo_handler.update_object_detection_with_tx_hash_and_hash_by_date(current_date, tx_hash, concatenated_hash, date_timestamp, timeDescription, camera_id)
+                    print("Updated object detection with tx_hash and concatenated_hash")
+                except Exception as e:
+                    print("Error while updating object detection with tx_hash and concatenated_hash:", str(e))
             else:
                 print("Không thể ghi video lên Blockchain")
+        print("Kết thúc xử lý ObjectDetections")
 
+        # print("Connection losses by camera:", connection_losses_by_camera)
         # Xử lý dữ liệu và ghi lên Blockchain cho từng camera về ConnectionLoss
         for cameraIndex, losses in connection_losses_by_camera.items():
             # Ghép nối lại các khoảng thời gian start_time và end_time
@@ -92,9 +101,14 @@ class DataProcessor:
                 tx_hash = tx_receipt['transactionHash'].hex()
                 print("Transaction hash:", tx_hash)
                 # update all losses with tx_hash and concatenated_losses in that date
-                self.mongo_handler.update_connection_loss_with_tx_hash_and_concatenated_losses_by_date(current_date, tx_hash, concatenated_losses, total_loss_per_day, date_timestamp, camera_id)
+                try:
+                    self.mongo_handler.update_connection_loss_with_tx_hash_and_concatenated_losses_by_date(current_date, tx_hash, concatenated_losses, total_loss_per_day, date_timestamp, camera_id)
+                    print("Updated connection losses with tx_hash and concatenated_losses")
+                except Exception as e:
+                    print("Error while updating connection losses with tx_hash and concatenated_losses:", str(e))
             else:
                 print("Không thể ghi connection losses lên Blockchain")
+        print("Kết thúc xử lý ConnectionLosses")
 
     def process_image_and_upload_to_blockchain(self, frame, image_info):
         camera_id = image_info["camera_id"]
@@ -103,14 +117,12 @@ class DataProcessor:
         image_hash = self.hash_image(frame)
         date_timestamp = int(datetime.timestamp(datetime.now()))
         timeDescription = f"Capture at Time: {image_info['capture_time']}"
-        print("Ghi lên Blockchain: ", cameraIndex, image_hash, date_timestamp, timeDescription)
 
         # Ghi lên Blockchain
         tx_receipt = self.blockchain_handler.upload_image_hash(cameraIndex, image_hash, date_timestamp, timeDescription)
         if tx_receipt:
             # Lấy transaction hash (string) từ tx_receipt 
             tx_hash = tx_receipt['transactionHash'].hex()
-            print("Transaction hash:", tx_hash)
             # update all losses with tx_hash and concatenated_losses in that date
             self.mongo_handler.update_image_info_with_tx_hash_and_hash_by_date(date_timestamp, tx_hash, image_hash, timeDescription, camera_id, capture_time)
         else:
