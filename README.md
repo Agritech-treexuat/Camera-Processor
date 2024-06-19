@@ -10,6 +10,27 @@
 ```shell
 pip install -r requirements.txt
 ```
+# Run
+## Object detect real time using Yolo and connection loss detect from camera
+```shell
+python run_rtsp_procesor.py
+```
+## Random capture image from camera
+```shell
+python run_image_capture_upload.py
+```
+## Upload video and connection info to Blockchain
+```shell
+python run_blockchain_upload.py
+```
+## Make overview video from image
+```shell
+python run_video_maker.py
+```
+## Fake capture image from video
+```shell
+python run_fake_data_image.py
+```
 ### ONNX Runtime
 For Nvidia GPU computers:
 `pip install onnxruntime-gpu`
@@ -27,3 +48,6 @@ from ultralytics import YOLO
 model = YOLO("yolov8m.pt") 
 model.export(format="onnx", imgsz=[480,640])
 ```
+
+# Reference
+https://github.com/ibaiGorordo/ONNX-YOLOv8-Object-Detection
