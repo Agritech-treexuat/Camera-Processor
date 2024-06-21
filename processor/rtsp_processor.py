@@ -374,7 +374,7 @@ class RTSPProcessor:
         frame_interval = int(fps / 24)  # Lấy 24 frame mỗi giây
 
         frame_count = 0
-        start_date = datetime(2024, 2, 2)  # Specify the desired start date
+        start_date = datetime(2024, 5, 19)  # Specify the desired start date
         current_time = start_date.replace(hour=0, minute=0, second=0, microsecond=0)
         delta = timedelta(hours=1)  # Each frame will represent a time point within a day
 

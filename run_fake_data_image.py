@@ -25,7 +25,7 @@ def main():
     
     # 1. RTSP Processor
     rtsp_processor = RTSPProcessor(frame_skip, mongo_uri, db_name)
-    rtsp_processor.extract_and_upload_frames('./video_farm.mp4', '6635fb75f2303b5211710426')
+    rtsp_processor.extract_and_upload_frames('./video_farm.mp4', '66544897e7f65e05a4bb1e0c')
 
 if __name__ == "__main__":
     main()
