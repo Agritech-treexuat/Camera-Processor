@@ -31,6 +31,10 @@ python run_video_maker.py
 ```shell
 python run_fake_data_image.py
 ```
+## Fake capture image hash and weather
+```shell
+python run_fake_image_hash_weather.py
+```
 ### ONNX Runtime
 For Nvidia GPU computers:
 `pip install onnxruntime-gpu`
